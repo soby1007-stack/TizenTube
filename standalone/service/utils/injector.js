@@ -32,10 +32,35 @@ function connectToDebugger(host, port, args) {
     })
 }
 
+// --- diagnostic helper: normalize whatever shape the daemon sends back ---
+function normalize(v) {
+    if (v === undefined || v === null) return '';
+    return String(v).trim();
+}
+
 function canConnectToDaemon() {
     return fetch('http://127.0.0.1:8001/api/v2/').then(res => res.json())
         .then(json => {
-            return { canConnectToDaemon: (json.device.developerIP === '127.0.0.1' || json.device.developerIP === '1.0.0.127') && json.device.developerMode === '1', ip: json.device.ip, isConnecting }
+            const device = json.device || {};
+            const ipRaw = device.developerIP;
+            const modeRaw = device.developerMode;
+
+            const ip = normalize(ipRaw);
+            const mode = normalize(modeRaw);
+
+            const ipOk = ip === '127.0.0.1' || ip === '1.0.0.127';
+            // accept '1', 1, true, 'true' — some older daemons report this differently
+            const modeOk = mode === '1' || mode === 'true' || mode.toLowerCase() === 'on';
+
+            const result = {
+                canConnectToDaemon: ipOk && modeOk,
+                ip: device.ip,
+                isConnecting,
+                // raw values kept for on-screen diagnostics in index.html
+                _debug: { developerIP: ipRaw, developerMode: modeRaw }
+            };
+
+            return result;
         }).catch(e => {
             return canConnectToDaemon();
         });
