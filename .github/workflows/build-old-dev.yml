@@ -1,0 +1,60 @@
+name: Build TizenTube Old Dev
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build standalone service
+        working-directory: standalone/service
+        run: |
+          npm install
+          npm run build
+
+      - name: Remove Cobalt flags
+        working-directory: standalone/service
+        run: |
+          node build-service.js remove-cobalt-flags
+
+      - name: Install tizen.js
+        run: |
+          npm install -g https://github.com/reisxd/tizen.js/tarball/main
+
+      - name: Create Tizen author certificate (self-signed, no Secrets needed)
+        run: |
+          tizenjs create-tizen-cert \
+            --name "soby1007" \
+            --email "soby1007@gmail.com" \
+            --password "tizentube1234" \
+            --privilege public \
+            --output "${GITHUB_WORKSPACE}/TizenTube-author.p12"
+
+      - name: Build Old Tizen WGT
+        working-directory: standalone
+        run: |
+          mkdir -p release
+          tizenjs build . \
+            -t wgt \
+            -o release/TizenTubeOld-dev.wgt \
+            -p public \
+            --author "${GITHUB_WORKSPACE}/TizenTube-author.p12" \
+            --authorPwd "tizentube1234" \
+            --ignore node_modules,/.*\.wgt$/,/userwidget/,/release/
+
+      - name: Upload WGT
+        uses: actions/upload-artifact@v4
+        with:
+          name: TizenTubeOld-dev
+          path: standalone/release/TizenTubeOld-dev.wgt
